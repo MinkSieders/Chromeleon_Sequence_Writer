@@ -8,7 +8,7 @@ are automatically assigned a position in an available tray. Created for usage on
 but should work for a range of Chromeleon versions (V6.8 is tested too). 
 
 
-Script outputs a pdf file with a AutoSampler (AS) loading overview and potential points where vials / 96-well plates 
+Script outputs a pdf file with a AutoSampler loading overview and potential points where vials / 96-well plates 
 need to be changed. 
 
 
