@@ -4,7 +4,7 @@
 Script that automatically generates HPLC sample sequence series from .xlsx 96-well plate designs and "normal" 
 1.5 mL vials. Trays where 96-well plates need to be mounted on are automatically assigned, and the script allows
 for more 96-well plates than available trays assuming the user switches them throughout the program. 1.5 mL vials 
-are automatically assigned a position in an available tray. Created for usage on Dionex AS-AP and Chromeleon V7 Software
+are automatically assigned a position in an available tray. Created for usage on Dionex AS-AP and Chromeleon V7.2.9 Software
 but should work for a range of Chromeleon versions (V6.8 is tested too). 
 
 
