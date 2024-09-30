@@ -192,7 +192,7 @@ def generate_HPLC_program(sorted_samples, instrument_method, injection_volume, o
 
     HPLC_df_final = std_replcicates(HPLC_df, x=rep_num_std)
 
-    HPLC_df_final.to_csv(os.path.join(output_folder, "HPLC_Sequence_"+folder+".txt"), index=False, sep="\t")
+    HPLC_df_final.to_csv(os.path.join(output_folder, "sample_sequence_"+folder+".txt"), index=False, sep="\t")
 
 
 # Function to generate vial layout image
@@ -450,7 +450,7 @@ if __name__ == "__main__":
 
     current_directory = os.getcwd()
     if args.output == None:
-        output_folder = folder + "_HPLC_sequence"
+        output_folder = folder + "_output"
 
         print(f"\nNo output folder is specified. Defaulting to output folder: {output_folder}")
 
