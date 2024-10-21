@@ -1,43 +1,37 @@
 import os
 import pandas as pd
 import argparse
-from itertools import product
-import matplotlib.pyplot as plt
 from fpdf import FPDF
 import matplotlib.colors as mcolors
 import requests
 import warnings
+import matplotlib.pyplot as plt
 
 """
 Author: Mink Sieders, 24/09/2024 09:21 AM
+
+Current Version: 6.1, 21/10/2024
 
 CHANGELOG:
 V5.1 Ensured standards (samples with id beginning with STD) are ran between samples controlled 
 with an x number of times throughout the run. 
 V5.2 Added a sample tray layout overview as part of the output in .pdf format.
 V5.3 Allows user to insert a different instrument method for samples stored in 1.5 mL vials
-V5.4 Outputs will be added in a user defined output, or default to: /TARGET_FOLDER_Output
+V5.4 Outputs will be added in a user defined output, or default to: /MANIFEST_FOLDER_Output
 V5.5 Added some options for user-input to prevent accidentally writing over pre-existing folders 
-V6.0 
+V6.0 Setupenv flag: setup an environment with empty files which can be used in the script. 
+V6.0 Adds an option to leave empty spaces on trays denoted by beginning with "OMIT{rest_of_sample_name}". 
+V6.1 Also adds a technical replicate number for standard samples (i.e., STD0uM.TR1 and STD0uM.TR2 etc.)
 
 FUTURE:
-Also adds a technical replicate number for standard samples (i.e., STD0uM.TR1 and STD0uM.TR2 etc.)
-Ensures when there are no vial samples all trays can be used for plates, and vice versa (no plates there should
+V7 Ensures when there are no vial samples all trays can be used for plates, and vice versa (no plates there should
 always be available vials). 
-Setupenv flag that can be turned on which makes the script setup an environment with empty files which can be used 
-in the script. 
-Things written down in the script denoted with "NOTE" 
-Add warning if there are multiple plates and one needs to be changed with a rough estimation of when it needs to be 
-changed. 
-Add an option to leave empty spaces on trays. 
-Output chromeleon sequence file instead of .txt
-Rainbow overview of how samples are sampled in 96-well plate samples and in the vial tray. 
-Also do non alphabetically/numerically ordered samples (which should not apply to standard samples). 
-
+V7 Add another flag where the script enters an editor for plate or vial manifest files. 
 """
 
+
 # Function to read and process the vials.xlsx file
-def process_vials(file_path, trays_for_vials):
+def process_vial_manifest(file_path, trays_for_vials):
     vials_df = pd.read_excel(file_path, header=None)
     vials_df.columns = ["Sample"]
     vials_df["Location"] = "VIAL"
@@ -69,7 +63,7 @@ def process_vials(file_path, trays_for_vials):
 
 
 # Function to process the plate .xlsx files
-def process_plate(plate_file, tray):
+def process_plate_manifest(plate_file, tray):
     plate_df = pd.read_excel(plate_file, header=0, index_col=0)
     plate_data = []
 
@@ -105,31 +99,36 @@ def format_sample_name(sample_name, replicate_number):
         return lower_s.startswith("std") or lower_s.startswith("standard")
 
     if starts_with_std_or_standard(sample_name):
-        return sample_name  # No changes for standard samples
-
-    try:
-        # Split the sample name at the first period
+        # Handle standard samples
         parts = sample_name.split(".")
-
-        # Extract the number part (the first part before the period)
         prefix = "".join([c for c in parts[0] if not c.isdigit()])
         number = "".join([c for c in parts[0] if c.isdigit()])
-
-        # Pad the number with leading zeros to make it 5 digits long
-        formatted_number = f"{int(number):05d}"
-
-        # Rebuild the sample name with the padded number
-        formatted_name = f"{prefix}{formatted_number}." + ".".join(parts[1:] if len(parts) > 1 else parts)
-
-        # Append technical replicate information
-        if replicate_number > 0:
-            formatted_name += f".TR{replicate_number}"
-
+        formatted_name = f"{prefix}{number}.TR{replicate_number}"
         return formatted_name
-    except Exception as e:
-        print(f"Error formatting sample name {sample_name}: {e}")
-        return sample_name  # Return unmodified in case of error
+    else:
+        # Handle non-standard samples
+        try:
+            # Split the sample name at the first period
+            parts = sample_name.split(".")
 
+            # Extract the number part (the first part before the period)
+            prefix = "".join([c for c in parts[0] if not c.isdigit()])
+            number = "".join([c for c in parts[0] if c.isdigit()])
+
+            # Pad the number with leading zeros to make it 5 digits long
+            formatted_number = f"{int(number):05d}"
+
+            # Rebuild the sample name with the padded number
+            formatted_name = f"{prefix}{formatted_number}." + ".".join(parts[1:] if len(parts) > 1 else parts)
+
+            # Append technical replicate information
+            if replicate_number > 0:
+                formatted_name += f".TR{replicate_number}"
+
+            return formatted_name
+        except Exception as e:
+            print(f"Error formatting sample name {sample_name}: {e}")
+            return sample_name  # Return unmodified in case of error
 
 # Insert repitition of STD samples from vials throughout program
 def std_replcicates(df, x):
@@ -151,9 +150,12 @@ def std_replcicates(df, x):
 
 # Function to generate the HPLC output file
 def generate_HPLC_program(sorted_samples, instrument_method, injection_volume, output_folder, rep_num_std, tech_rep_num):
+    # Filter out samples that are marked with "OMIT"
+    filtered_samples = sorted_samples[~sorted_samples["Sample"].str.startswith("OMIT", na=False)]
+
     HPLC_data = []
 
-    for idx, sample in sorted_samples.iterrows():
+    for idx, sample in filtered_samples.iterrows():
         num_replicates = get_technical_replicates(sample["Sample"], tech_rep_num)  # Get the number of replicates
 
         for replicate_number in range(num_replicates):
@@ -361,7 +363,7 @@ def main(folder, instrument_method, injection_volume, out_fol, plate_tray_number
 
     # Process vials.xlsx
     if os.path.exists(vials_file):
-        vials_data = process_vials(vials_file, trays_for_vials)
+        vials_data = process_vial_manifest(vials_file, trays_for_vials)
     else:
         warnings.warn("No vials.xlsx file found! Will assume the user does not require any samples in vial trays")
         vials_data = pd.DataFrame(columns=["Sample", "Location"])
@@ -376,7 +378,7 @@ def main(folder, instrument_method, injection_volume, out_fol, plate_tray_number
         # Process each plate file and append the result to the list
         for plate_file in plate_files:
             tray = trays_for_plates[tray_index]
-            plate_data = process_plate(os.path.join(plates_folder, plate_file), tray)
+            plate_data = process_plate_manifest(os.path.join(plates_folder, plate_file), tray)
             all_plate_data_list.append(plate_data)
             tray_index = (tray_index + 1) % len(trays_for_plates)
         all_plate_data = pd.concat(all_plate_data_list, ignore_index=True)
@@ -411,11 +413,67 @@ def main(folder, instrument_method, injection_volume, out_fol, plate_tray_number
     # Generate the PDF with the vial layout image and tray mapping
     generate_pdf(os.path.join(out_fol,"AS_loading_protocol.pdf"), tray_mapping)
 
-    print("\nAll outputs generated, no errors occured.")
+    print("\nAll outputs generated.")
+
+
+def main_setup_env():
+    def create_vials_excel(file_path):
+        vials_data = [[f'VIAL_EXAMPLE_{i}.R1.T0'] for i in range(1, 6)]  # VIAL_EXAMPLE_1 to VIAL_EXAMPLE_5
+        std_data = [[f'STD_EXAMPLE_{i}.R1.T0'] for i in range(1, 6)]  # STD_EXAMPLE_1 to STD_EXAMPLE_5
+        omit_data = [[f'OMIT_EXAMPLE_{i}.R1.T0'] for i in range(1, 6)]  # STD_EXAMPLE_1 to STD_EXAMPLE_5
+        combined_data = std_data + vials_data + omit_data
+        df = pd.DataFrame(combined_data)
+        df.to_excel(file_path, index=False, header=False)
+
+    def create_plate_excel(file_path, plate_name):
+        # Create an Excel file with the layout described and replace the sample names with EXAMPLE_{A/B/C}_Well_{1-through-96}
+        columns = list(range(1, 13))  # 12 columns
+        rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']  # 8 rows
+
+        # Initialize an empty dictionary for the plate data
+        data = {}
+
+        # Well numbering starts from 1 to 96 row-wise
+        well_number = 1
+        for row in rows:
+            data[row] = [f'EXAMPLE_{plate_name}_Well_{well_number + i}.R1.T0' for i in range(12)]
+            well_number += 12  # Move to the next set of 12 wells for the next row
+
+        # Create the DataFrame and save it as an Excel file
+        df = pd.DataFrame(data, index=columns).transpose()
+        df.to_excel(file_path, index=True)
+
+    # Ask the user whether to create the default folder in the current directory
+    create_default = input(
+        "Do you want to create the template manifest folder in the current directory with the default name 'template_manifest_folder'? (y/n): ").strip().lower()
+
+    if create_default == 'y':
+        manifest_folder = 'template_manifest_folder'
+    else:
+        # Ask the user for a custom folder path
+        manifest_folder = input("Please provide the desired template manifest folder path: ").strip().rstrip('/')
+
+    # Create the manifest template folder
+    os.makedirs(manifest_folder, exist_ok=True)
+
+    # Create the 'vials.xlsx' file
+    vials_file_path = os.path.join(manifest_folder, 'vials.xlsx')
+    create_vials_excel(vials_file_path)
+
+    # Create the 'plates' folder
+    plates_folder = os.path.join(manifest_folder, 'plates')
+    os.makedirs(plates_folder, exist_ok=True)
+
+    # Create the three plate Excel files
+    for plate in ['A', 'B', 'C']:
+        plate_file_path = os.path.join(plates_folder, f'PLATE_EXAMPLE_{plate}.xlsx')
+        create_plate_excel(plate_file_path, plate)
+
+    # Finish with a message
+    print(f"Created template manifest folder environment at location: {os.path.abspath(manifest_folder)}")
 
 
 if __name__ == "__main__":
-    # Command-line arguments
     parser = argparse.ArgumentParser(description="Generate HPLC program from sample data.")
     parser.add_argument("--folder", help="Folder containing vials.xlsx and plates folder.", default=None)
     parser.add_argument("--instrument_method", default=None,
@@ -436,89 +494,104 @@ if __name__ == "__main__":
                         help="Number of times each sample is injected into HPLC (technical replicates, default = 2)")
     parser.add_argument("--vial_instrument_method", default=None, type=str,
                         help="Used to specify a method for vial samples that differs from the main instrument_method")
+    parser.add_argument("--setup_env", default=False, type=bool,
+                        help="Omits main script, creates an environment folder with 96-well plate template"
+                             "files and the main 'vials' excel sheet. ")
     args = parser.parse_args()
 
-    if args.folder == None:
-        raise Exception(f"Please specify a target folder where samples are located")
-    else:
-
-        """
-        NOTE: Need to remove a potential / at the end of the folder name if it is there, it will fuck up the foldering
-        """
-
-        folder = args.folder
-
-    current_directory = os.getcwd()
-    if args.output == None:
-        output_folder = folder + "_output"
-
-        print(f"\nNo output folder is specified. Defaulting to output folder: {output_folder}")
-
-        output = os.path.join(current_directory, output_folder)
+    if args.setup_env == True:
+        main_setup_env()
 
     else:
-        output_folder = args.output
-        output = os.path.join(current_directory, output_folder)
-
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-        print(f"Created output folder: {output_folder}")
-
-    else:
-        user_input = input(
-            f"\nOutput folder already exists at {output_folder}. Do you want to continue using this folder and "
-            f"potentially overwrite existing files? (yes/no): ")
-
-        if user_input.lower() == "yes":
-            print(f"\nContinuing with existing folder: {output_folder}")
-        elif user_input.lower() == "no":
-            new_folder_name = input("\nPlease enter a new folder name: ")
-            output_folder = new_folder_name + "_HPLC_sequence"
-            output = os.path.join(current_directory, output_folder)
-            os.makedirs(output)  # Create the new folder
-            print(f"\nCreated output folder: {output_folder}")
+        if args.folder == None:
+            raise Exception(f"Please specify a manifest folder where samples are located")
         else:
-            print("\nInvalid input. Exiting.")
-            exit(1)  # Exit if input is not valid
+            folder = args.folder.rstrip('/')
+            if not os.path.exists(folder):
+                raise Exception(f"Manifest folder '{folder}' does not exist")
 
-    tmp = os.path.join(output, "tmp")
-    if not os.path.exists(tmp):
-        os.makedirs(tmp)
+        statusTmpDeletion = 999
+        current_directory = os.getcwd()
+        if args.output == None:
+            output_folder = folder + "_output"
 
-    if args.instrument_method == None:
-        method = "MS_Catecholamine_Iso_col25"
-        print(f"\nUsing default instrument method name: {method}")
-    else:
-        method = args.instrument_method
+            print(f"\nNo output folder is specified. Defaulting to output folder: {output_folder}")
 
-    if args.injection_volume == None:
-        inj_vol = 25.0
-        print(f"Using default injection volume: {inj_vol}")
-    else:
-        inj_vol = args.injection_volume
+            output = os.path.join(current_directory, output_folder)
 
-    if args.plate_tray_number == None:
-        trays96 = 2
-        print(f"Using default 96-well plate tray number: {trays96}")
-    else:
-        trays96 = args.plate_tray_number
+        else:
+            output_folder = args.output
+            output = os.path.join(current_directory, output_folder)
 
-    if args.standard_replicate_number == None:
-        std_reps = 5
-        print(f"Using default standard replicate number: {std_reps}")
-    else:
-        std_reps = args.standard_replicate_number
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+            print(f"Created output folder: {output_folder}")
 
-    if args.trays == None:
-        trays = ["R", "G", "B"]
-        print(f"Using default available trays: {trays}")
-    else:
-        trays = args.trays
+        else:
+            user_input = input(
+                f"\nOutput folder already exists at {output_folder}. Do you want to continue using this folder and "
+                f"potentially overwrite existing files? (y/n): ")
 
-    if args.technical_replicates_samples == None:
-        tech_replicates_samples = 2
-        print(f"Using default number of technical replicates for samples: {tech_replicates_samples}")
-    else:
-        tech_replicates_samples = args.technical_replicates_samples
+            if user_input.lower() == "y":
+                print(f"\nContinuing with existing folder: {output_folder}")
+                statusTmpDeletion = 36
 
-    main(folder, method, inj_vol, output, trays96, std_reps,trays, tech_replicates_samples)
+            elif user_input.lower() == "n":
+                new_folder_name = input("\nPlease enter a new folder name: ")
+                output_folder = new_folder_name + "_HPLC_sequence"
+                output = os.path.join(current_directory, output_folder)
+                os.makedirs(output)  # Create the new folder
+                print(f"\nCreated output folder: {output_folder}")
+            else:
+                print("\nInvalid input. Exiting.")
+                exit(1)  # Exit if input is not valid
+
+        tmp = os.path.join(output, "tmp")
+        if not os.path.exists(tmp):
+            os.makedirs(tmp)
+        else:
+            if statusTmpDeletion == 36:
+                try:
+                    os.rmdir(tmp)
+                except FileNotFoundError:
+                    print(f"Error: {e}")
+                except OSError as e:
+                    print(f"Error: {e}")
+
+        if args.instrument_method == None:
+            method = "MS_Catecholamine_Iso_col25"
+            print(f"\nUsing default instrument method name: {method}")
+        else:
+            method = args.instrument_method
+
+        if args.injection_volume == None:
+            inj_vol = 25.0
+            print(f"Using default injection volume: {inj_vol}")
+        else:
+            inj_vol = args.injection_volume
+
+        if args.plate_tray_number == None:
+            trays96 = 2
+            print(f"Using default 96-well plate tray number: {trays96}")
+        else:
+            trays96 = args.plate_tray_number
+
+        if args.standard_replicate_number == None:
+            std_reps = 5
+            print(f"Using default standard replicate number: {std_reps}")
+        else:
+            std_reps = args.standard_replicate_number
+
+        if args.trays == None:
+            trays = ["R", "G", "B"]
+            print(f"Using default available trays: {trays}")
+        else:
+            trays = args.trays
+
+        if args.technical_replicates_samples == None:
+            tech_replicates_samples = 2
+            print(f"Using default number of technical replicates for samples: {tech_replicates_samples}")
+        else:
+            tech_replicates_samples = args.technical_replicates_samples
+
+        main(folder, method, inj_vol, output, trays96, std_reps,trays, tech_replicates_samples)
