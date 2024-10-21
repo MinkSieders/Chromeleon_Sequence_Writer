@@ -6,6 +6,9 @@ import matplotlib.colors as mcolors
 import requests
 import warnings
 import matplotlib.pyplot as plt
+import tkinter as tk
+from tkinter import filedialog, messagebox
+from tkinter import ttk
 
 """
 Chromeleon Sample Sequence Writer
@@ -22,27 +25,25 @@ V5.5 Added some options for user-input to prevent accidentally writing over pre-
 V6.0 Setupenv flag: setup an environment with empty files which can be used in the script. 
 V6.0 Adds an option to leave empty spaces on trays denoted by beginning with "OMIT{rest_of_sample_name}". 
 V6.1 Also adds a technical replicate number for standard samples (i.e., STD0uM.TR1 and STD0uM.TR2 etc.)
+V7 Add another flag where the script enters an editor for plate or vial manifest files. 
 
 FUTURE:
 V7 Ensures when there are no vial samples all trays can be used for plates, and vice versa (no plates there should
 always be available vials). 
-V7 Add another flag where the script enters an editor for plate or vial manifest files. 
 
 Input:
 - A manifest folder containing:
   - A 'plates' subfolder with .xlsx files for 96-well plate designs
   - A 'vials.xlsx' file for 1.5 mL vial samples
 
-Usage:
-- Run with --help for usage instructions
-- Use --setup_env True to create a mock/template manifest folder environment
+User is referred to the accompanying readme file for extensive explanation, or use --help
 
 Note: This script is flexible and can handle various plate and vial configurations. Users should not change the 
 'vials.xlsx' filename, but plate manifest files in the 'plates' folder can have any name.
 
 Author: Mink Sieders
-Version: 6.1
-Last Updated: 21/10/2024
+Version: 7
+Last Updated: 22/10/2024
 """
 
 
@@ -106,48 +107,80 @@ def get_technical_replicates(sample_name, tr_num):
 
 # Reformat sample names for better alphabetically sorting later on in program
 def format_sample_name(sample_name, replicate_number):
-    def starts_with_std_or_standard(s):
+    def starts_with_std(s):
         # Convert the string to lowercase
         if pd.isna(s):
             return False
         lower_s = s.lower()
-        # Check if it starts with "std" or "standard"
-        return lower_s.startswith("std") or lower_s.startswith("standard")
+        # Check if it starts with "std"
+        return lower_s.startswith("std")
 
-    if starts_with_std_or_standard(sample_name):
-        # Handle standard samples
-        parts = sample_name.split(".")
-        prefix = "".join([c for c in parts[0] if not c.isdigit()])
-        number = "".join([c for c in parts[0] if c.isdigit()])
-        formatted_name = f"{prefix}{number}.TR{replicate_number}"
+
+    def parse_sample_name(s):
+        if pd.isna(s) or not s:
+            return "", 0, 0  # Return empty name and zeros if input is not valid
+
+        # Initialize default values
+        name = s
+        replicate = 0
+        timepoint = None
+
+
+        # Check if the string contains '.'
+        if '.' in s:
+            parts = s.split('.')
+            name = parts[0]  # The first part is always the name
+
+            # Loop through the remaining parts to find replicate and timepoint
+            for part in parts[1:]:
+                if part.startswith('R') and part[1:].isdigit():
+                    replicate = int(part[1:])  # Get replicate number
+                elif part.startswith('T') and part[1:].isdigit():
+                    timepoint = int(part[1:])  # Get timepoint number
+
+        return name, replicate, timepoint
+
+    # Handle standard samples
+    if starts_with_std(sample_name):
+        formatted_name = f"{sample_name}"
+        if replicate_number > 0:
+            formatted_name += f".TR{replicate_number}"
         return formatted_name
-    else:
-        # Handle non-standard samples
-        try:
-            # Split the sample name at the first period
-            parts = sample_name.split(".")
 
-            # Extract the number part (the first part before the period)
-            prefix = "".join([c for c in parts[0] if not c.isdigit()])
-            number = "".join([c for c in parts[0] if c.isdigit()])
+    # Handle non-standard samples
+    try:
+        # Parse the sample name
+        name, r_number, t_number = parse_sample_name(sample_name)
 
-            # Pad the number with leading zeros to make it 5 digits long
-            formatted_number = f"{int(number):05d}"
+        # Extract the number part (the first part before the period)
+        prefix = "".join([c for c in name if not c.isdigit()])  # Changed name[0] to name
+        number = "".join([c for c in name if c.isdigit()])
 
-            # Rebuild the sample name with the padded number
-            formatted_name = f"{prefix}{formatted_number}." + ".".join(parts[1:] if len(parts) > 1 else parts)
+        # Pad the number with leading zeros to make it 5 digits long
+        formatted_number = f"{int(number):05d}" if number else "00000"
 
-            # Append technical replicate information
-            if replicate_number > 0:
-                formatted_name += f".TR{replicate_number}"
+        # Rebuild the sample name with the padded number
+        formatted_name = f"{prefix}{formatted_number}"
 
-            return formatted_name
-        except Exception as e:
-            print(f"Error formatting sample name {sample_name}: {e}")
-            return sample_name  # Return unmodified in case of error
+        # Append replicate information
+        if r_number > 0:
+            formatted_name += f".R{r_number}"
+
+        # Append timepoint information
+        if t_number != None:
+            formatted_name += f".T{t_number}"
+
+        # Append technical replicate information
+        if replicate_number > 0:
+            formatted_name += f".TR{replicate_number}"
+
+        return formatted_name
+    except Exception as e:
+        print(f"Error formatting sample name {sample_name}: {e}")
+        return sample_name  # Return unmodified in case of error
 
 # Insert repitition of STD samples from vials throughout program
-def std_replcicates(df, x):
+def standard_replicates(df, x):
     # Step 1: Identify rows where the "Name" column contains "STD"
     std_rows = df[df["Name"].str.contains("STD", na=False)]
 
@@ -208,9 +241,18 @@ def generate_HPLC_program(sorted_samples, instrument_method, injection_volume, o
                            columns=["ED_1", "Name", "Type", "Level", "Position", "Volume [ul]", "Instrument Method"])
     HPLC_df = HPLC_df.sort_values(by="Name").reset_index(drop=True)
 
-    HPLC_df_final = std_replcicates(HPLC_df, x=rep_num_std)
+    HPLC_df_final = standard_replicates(HPLC_df, x=rep_num_std)
 
-    HPLC_df_final.to_csv(os.path.join(output_folder, "sample_sequence_"+folder+".txt"), index=False, sep="\t")
+    def extract_rightmost_text(folder_string):
+        # Check if '/' exists in the string
+        if '/' in folder_string:
+            # Split the string by '/' and return the last element
+            return folder_string.split('/')[-1]
+        else:
+            # Return the original string if '/' is not present
+            return folder_string
+
+    HPLC_df_final.to_csv(os.path.join(output_folder, "sample_sequence_"+extract_rightmost_text(folder)+".txt"), index=False, sep="\t")
 
 
 # Function to generate vial layout image
@@ -434,9 +476,9 @@ def main(folder, instrument_method, injection_volume, out_fol, plate_tray_number
 
 def main_setup_env():
     def create_vials_excel(file_path):
-        vials_data = [[f'VIAL_EXAMPLE_{i}.R1.T0'] for i in range(1, 6)]  # VIAL_EXAMPLE_1 to VIAL_EXAMPLE_5
-        std_data = [[f'STD_EXAMPLE_{i}.R1.T0'] for i in range(1, 6)]  # STD_EXAMPLE_1 to STD_EXAMPLE_5
-        omit_data = [[f'OMIT_EXAMPLE_{i}.R1.T0'] for i in range(1, 6)]  # STD_EXAMPLE_1 to STD_EXAMPLE_5
+        vials_data = [[f'EX_{i}.R1.T0'] for i in range(1, 6)]  # VIAL_EXAMPLE_1 to VIAL_EXAMPLE_5
+        std_data = [[f'STD_EX_{i}.R1.T0'] for i in range(1, 6)]  # STD_EXAMPLE_1 to STD_EXAMPLE_5
+        omit_data = [[f'OMIT_EX_{i}.R1.T0'] for i in range(1, 6)]  # STD_EXAMPLE_1 to STD_EXAMPLE_5
         combined_data = std_data + vials_data + omit_data
         df = pd.DataFrame(combined_data)
         df.to_excel(file_path, index=False, header=False)
@@ -452,7 +494,7 @@ def main_setup_env():
         # Well numbering starts from 1 to 96 row-wise
         well_number = 1
         for row in rows:
-            data[row] = [f'EXAMPLE_{plate_name}_Well_{well_number + i}.R1.T0' for i in range(12)]
+            data[row] = [f'EX_{plate_name}_W{well_number + i}.R1.T0' for i in range(12)]
             well_number += 12  # Move to the next set of 12 wells for the next row
 
         # Create the DataFrame and save it as an Excel file
@@ -489,6 +531,247 @@ def main_setup_env():
     print(f"Created template manifest folder environment at location: {os.path.abspath(manifest_folder)}")
 
 
+def start_editor_UI():
+    # Create the main window
+    root = tk.Tk()
+    root.title("Manifest Editor")
+    root.geometry("800x600")
+
+    # Global variables to store the current dataframe and filepath
+    df = None
+    current_file = None
+    tree = None  # To hold the Treeview widget
+
+    def load_file():
+        nonlocal df, current_file
+        file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx")])
+        if file_path:
+            try:
+                current_file = file_path
+                file_name = os.path.basename(file_path)
+
+                if file_name == 'vials.xlsx':
+                    # Read without headers for vial mode
+                    df = pd.read_excel(file_path, header=None)
+                    mode_label.config(text="Mode: Vial Mode")
+                    add_row_btn.config(state=tk.NORMAL)
+                    delete_row_btn.config(state=tk.NORMAL)
+                else:
+                    # Read with headers for 96-well mode
+                    df = pd.read_excel(file_path)
+                    mode_label.config(text="Mode: 96-Well Mode")
+                    add_row_btn.config(state=tk.DISABLED)
+                    delete_row_btn.config(state=tk.DISABLED)
+
+                update_table()
+                messagebox.showinfo("File Loaded", f"Successfully loaded {file_path}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to load file: {e}")
+
+    def save_file():
+        nonlocal df, current_file
+        if current_file:
+            try:
+                df.to_excel(current_file, index=False)
+                messagebox.showinfo("File Saved", f"File successfully saved to {current_file}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save file: {e}")
+        else:
+            save_as()
+
+    def save_as():
+        nonlocal df, current_file
+        file_path = filedialog.asksaveasfilename(defaultextension=".xlsx", filetypes=[("Excel files", "*.xlsx")])
+        if file_path:
+            try:
+                df.to_excel(file_path, index=False)
+                current_file = file_path
+                messagebox.showinfo("File Saved", f"File successfully saved to {file_path}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save file: {e}")
+
+    def update_table():
+        nonlocal tree
+        for widget in table_frame.winfo_children():
+            widget.destroy()
+
+        if df is not None:
+            cols = list(df.columns)
+            nonlocal tree
+            tree = ttk.Treeview(table_frame, columns=cols, show="headings", selectmode="browse")
+            for col in cols:
+                tree.heading(col, text=col)
+                tree.column(col, anchor=tk.CENTER, width=100)
+
+            # Insert rows
+            for index, row in df.iterrows():
+                tree.insert("", "end", values=list(row))
+
+            tree.pack(expand=True, fill=tk.BOTH)
+
+    def add_row():
+        nonlocal df
+        if df is not None:
+            new_row = [""] * len(df.columns)  # Create an empty row
+            df.loc[len(df)] = new_row
+            update_table()
+
+    def delete_row():
+        nonlocal df
+        if df is not None:
+            try:
+                selected_items = tree.selection()
+                for item in selected_items:
+                    tree.delete(item)
+                    # Also remove it from the dataframe
+                    df.drop(df.index[int(item)], inplace=True)
+                df.reset_index(drop=True, inplace=True)
+                update_table()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to delete row: {e}")
+
+    def sample_format_4ui(sample_name, replicate_number, r_num=None, t_num=None):
+        def starts_with_std(s):
+            if pd.isna(s):
+                return False
+            lower_s = s.lower()
+            return lower_s.startswith("std")
+
+        def parse_sample_name(s):
+            if pd.isna(s) or not s:
+                return "", 0, 0
+
+            name = s
+            replicate = 0
+            timepoint = None
+
+            if '.' in s:
+                parts = s.split('.')
+                name = parts[0]
+
+                for part in parts[1:]:
+                    if part.startswith('R') and part[1:].isdigit():
+                        replicate = int(part[1:])
+                    elif part.startswith('T') and part[1:].isdigit():
+                        timepoint = int(part[1:])
+
+            return name, replicate, timepoint
+
+        if starts_with_std(sample_name):
+            formatted_name = f"{sample_name}"
+            if replicate_number > 0:
+                formatted_name += f".TR{replicate_number}"
+            return formatted_name
+
+        try:
+            name, r_number, t_number = parse_sample_name(sample_name)
+            prefix = "".join([c for c in name if not c.isdigit()])
+            number = "".join([c for c in name if c.isdigit()])
+            formatted_number = f"{int(number):05d}" if number else "00000"
+            formatted_name = f"{prefix}{formatted_number}"
+
+            if r_num is not None:
+                formatted_name += f".R{r_num}"
+            elif r_number > 0:
+                formatted_name += f".R{r_number}"
+
+            if t_num is not None:
+                formatted_name += f".T{t_num}"
+            elif t_number is not None:
+                formatted_name += f".T{t_number}"
+
+            if replicate_number > 0:
+                formatted_name += f".TR{replicate_number}"
+
+            return formatted_name
+        except Exception as e:
+            print(f"Error formatting sample name {sample_name}: {e}")
+            return sample_name
+
+    def set_r_t_numbers(event):
+
+        nonlocal tree
+        # Identify the clicked cell (row and column)
+        item_id = tree.identify_row(event.y)  # Get the row item ID
+        col_id = tree.identify_column(event.x)  # Get the column (e.g., #1, #2, etc.)
+
+        if item_id and col_id:
+            col_num = int(col_id.replace("#", "")) - 1  # Convert to zero-based index
+            try:
+                # Get the current sample name from the clicked cell
+                sample_name = tree.item(item_id, 'values')[col_num]
+
+                # Get the R and T values from the Entry fields
+                r_value = int(r_entry.get()) if r_entry.get() else None
+                t_value = int(t_entry.get()) if t_entry.get() else None
+
+                # Validate R and T values
+                if r_value is None or t_value is None:
+                    messagebox.showerror("Invalid input", "Please enter valid R and T values.")
+                    return
+
+                # Call the existing format_sample_name function to get the new name
+                new_sample_name = sample_format_4ui(sample_name, replicate_number=0, r_num=r_value, t_num=t_value)
+
+                # Update the table with the new sample name
+                values = list(tree.item(item_id, 'values'))
+                values[col_num] = new_sample_name  # Update the specific cell
+                tree.item(item_id, values=values)  # Set the updated values
+
+                print(f"Current sample name: {sample_name}")
+                print(f"R value: {r_value}, T value: {t_value}")
+                print(f"New sample name: {new_sample_name}")
+
+            except ValueError:
+                messagebox.showerror("Invalid input", "R and T values must be integers")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to update cell: {e}")
+
+
+    # UI Components
+    table_frame = tk.Frame(root)
+    table_frame.pack(expand=True, fill=tk.BOTH)
+
+    btn_frame = tk.Frame(root)
+    btn_frame.pack(fill=tk.X)
+
+    mode_label = tk.Label(btn_frame, text="Mode: 96-Well Mode")  # Default to 96-Well Mode
+    mode_label.pack(side=tk.LEFT, padx=5, pady=5)
+
+    load_btn = tk.Button(btn_frame, text="Load File", command=load_file)
+    load_btn.pack(side=tk.LEFT, padx=5, pady=5)
+
+    save_btn = tk.Button(btn_frame, text="Save File", command=save_file)
+    save_btn.pack(side=tk.LEFT, padx=5, pady=5)
+
+    save_as_btn = tk.Button(btn_frame, text="Save As", command=save_as)
+    save_as_btn.pack(side=tk.LEFT, padx=5, pady=5)
+
+    add_row_btn = tk.Button(btn_frame, text="Add Row", command=add_row, state=tk.DISABLED)
+    add_row_btn.pack(side=tk.LEFT, padx=5, pady=5)
+
+    delete_row_btn = tk.Button(btn_frame, text="Delete Row", command=delete_row, state=tk.DISABLED)
+    delete_row_btn.pack(side=tk.LEFT, padx=5, pady=5)
+
+    r_label = tk.Label(btn_frame, text="Set R:")
+    r_label.pack(side=tk.LEFT, padx=5)
+
+    r_entry = tk.Entry(btn_frame, width=5)
+    r_entry.pack(side=tk.LEFT, padx=5)
+
+    t_label = tk.Label(btn_frame, text="Set T:")
+    t_label.pack(side=tk.LEFT, padx=5)
+
+    t_entry = tk.Entry(btn_frame, width=5)
+    t_entry.pack(side=tk.LEFT, padx=5)
+
+    # Bind left mouse click to the set_r_t_numbers function
+    table_frame.bind('<Button-1>', set_r_t_numbers)
+
+    # Start the Tkinter event loop
+    root.mainloop()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate HPLC program from sample data.")
     parser.add_argument("--folder", help="Folder containing vials.xlsx and plates folder.", default=None)
@@ -513,10 +796,15 @@ if __name__ == "__main__":
     parser.add_argument("--setup_env", default=False, type=bool,
                         help="Omits main script, creates an environment folder with 96-well plate template"
                              "files and the main 'vials' excel sheet. ")
+    parser.add_argument("--manifest_editor", default=False, type=bool,
+                        help="Opens a UI wherein the user can edit the manifest files in the manifest folder ")
     args = parser.parse_args()
 
     if args.setup_env == True:
         main_setup_env()
+
+    elif args.manifest_editor == True:
+        start_editor_UI()
 
     else:
         if args.folder == None:
@@ -569,7 +857,7 @@ if __name__ == "__main__":
             if statusTmpDeletion == 36:
                 try:
                     os.rmdir(tmp)
-                except FileNotFoundError:
+                except FileNotFoundError as e:
                     print(f"Error: {e}")
                 except OSError as e:
                     print(f"Error: {e}")
