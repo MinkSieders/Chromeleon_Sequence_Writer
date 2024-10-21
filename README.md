@@ -16,6 +16,13 @@ This script automatically generates HPLC sample sequence series from .xlsx 96-we
   - A 'plates' subfolder with .xlsx files for 96-well plate designs
   - A 'vials.xlsx' file for 1.5 mL vial samples
 
+- Sample names can be whatever, do not use '.' in the sample name. The '.' sign is used for organizing 
+replicates and timepoints. Input sample names should follow this structure '{Name}.R{num}.T{12}', 
+for example like this: 'S001.R1.T12'. This would denote sample with name S001, Replicate 1 and Timepoint 12. 
+The R and T notations are not required and the script will also function when only a name is defined.
+If a '.' is used, the script will still attempt to seperate the string into components and find replicate
+and timepoint numbers. The script will assume the component at index 0 will be the sample name. 
+
 ## Usage
 Run the script with the following command:
 
