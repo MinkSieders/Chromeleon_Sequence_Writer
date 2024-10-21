@@ -1,32 +1,65 @@
 # Autosampler Sample Sequence Writer For Chromeleon Software
 
+## Description
+This script automatically generates HPLC sample sequence series from .xlsx 96-well plate designs and 1.5 mL vials. It's designed for use with Dionex AS-AP and Chromeleon V7.2.9 Software, but is compatible with a range of Chromeleon versions (tested with V6.8 as well).
 
-Script that automatically generates HPLC sample sequence series from .xlsx 96-well plate designs and "normal" 
-1.5 mL vials. Trays where 96-well plates need to be mounted on are automatically assigned, and the script allows
-for more 96-well plates than available trays assuming the user switches them throughout the program. 1.5 mL vials 
-are automatically assigned a position in an available tray. Created for usage on Dionex AS-AP and Chromeleon V7.2.9 Software
-but should work for a range of Chromeleon versions (V6.8 is tested too). 
+## Key Features
+- Automatically assigns trays for 96-well plates and 1.5 mL vials
+- Supports more 96-well plates than available trays, assuming user switches them during the run
+- Outputs a PDF file with an AutoSampler loading overview and potential plate/vial change points
+- Handles standard samples (prefixed with 'STD') by running them at the start, end, and at user-defined intervals
+- Allows omission of samples by prefixing them with 'OMIT'
+- Generates technical replicates for samples
 
+## Input Requirements
+- A manifest folder containing:
+  - A 'plates' subfolder with .xlsx files for 96-well plate designs
+  - A 'vials.xlsx' file for 1.5 mL vial samples
 
-Script outputs a pdf file with a AutoSampler loading overview and potential points where vials / 96-well plates 
-need to be changed. 
+## Usage
+Run the script with the following command:
+python ChromeleonSequenceWriter_V6.1.py [arguments]
 
+### Arguments
+- `--folder`: Path to the folder containing vials.xlsx and plates folder (required)
+- `--instrument_method`: Instrument method used for all samples (default: MS_Catecholamine_Iso_col25)
+- `--injection_volume`: Injection volume in µl (default: 25.0)
+- `--output`: Output folder name (default: [input_folder_name]_output)
+- `--plate_tray_number`: Number of trays allocated for plates (default: 2)
+- `--standard_replicate_number`: Number of times the standard series is run (default: 5, must be at least 2)
+- `--trays`: List of color codes for each sampling tray available in the HPLC autosampler (default: ['R', 'G', 'B'])
+- `--technical_replicates_samples`: Number of times each sample is injected into HPLC (default: 2)
+- `--vial_instrument_method`: Specify a method for vial samples that differs from the main instrument_method
+- `--setup_env`: Create a template manifest folder environment (use: --setup_env True)
 
-Samples designated as beginning with STD will be considered standard samples, and will be ran in the beginning and
-the end of a sequence in addition to a user defined number of times throughout the sequence. Samples names beginning with OMIT
-will not be included in the sample sequence. 
+### Examples
+1. Basic usage:
+python ChromeleonSequenceWriter_V6.1.py --folder /path/to/manifest_folder
 
+2. Custom settings:
+python ChromeleonSequenceWriter_V6.1.py --folder /path/to/manifest_folder --instrument_method Custom_Method --injection_volume 30 --plate_tray_number 3 --standard_replicate_number 4
 
-User can define their samples using a manifest folder containing .xlsx files which contains a folder named 'plates' 
-and a manifest for 'vial' samples named 'vials.xlsx'. the 'plates' folder contains .xlsx files which have 
-plate sample designs (plate manifest files) in .xlsx format where the user can define respective sample names.
-Plate .xlsx files can be named anything as long as they are located in the plates folder. The user should not change 
-the vials.xlsx filename. 
+3. Setup template environment:
+python ChromeleonSequenceWriter_V6.1.py --setup_env True
 
+## Output
+The script generates:
+1. A sample sequence file in the specified output folder
+2. A PDF file with the AutoSampler loading overview
+3. Images of vial tray layouts
 
-For usage, run with --help. 
+## Notes
+- Do not change the 'vials.xlsx' filename
+- Plate manifest files in the 'plates' folder can have any name, as long as they are .xlsx files
+- Samples prefixed with 'STD' are treated as standards
+- Samples prefixed with 'OMIT' are excluded from the sequence
 
+## Author
+Mink Sieders
 
-To setup a mock/template manifest folder environment, run with --setup_env True
+## Version
+6.1 (Last Updated: 21/10/2024)
+
+## License
 
 
