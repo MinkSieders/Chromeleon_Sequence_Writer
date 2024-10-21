@@ -34,7 +34,12 @@ Run the script with the following command:
 - `--setup_env`: Create a template manifest folder environment (use: --setup_env True)
 
 ### Examples
-1. Basic usage:
+
+1. Setup template environment:
+
+`python ChromeleonSequenceWriter_V6.1.py --setup_env True`
+
+2. Basic usage:
 
 `python ChromeleonSequenceWriter_V6.1.py --folder /path/to/manifest_folder`
 
@@ -42,9 +47,6 @@ Run the script with the following command:
 
 `python ChromeleonSequenceWriter_V6.1.py --folder /path/to/manifest_folder --instrument_method Custom_Method --injection_volume 30 --plate_tray_number 3 --standard_replicate_number 4`
 
-5. Setup template environment:
-
-`python ChromeleonSequenceWriter_V6.1.py --setup_env True`
 
 ## Output
 The script generates:
