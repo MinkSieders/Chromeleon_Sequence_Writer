@@ -28,7 +28,7 @@ V6.1 Also adds a technical replicate number for standard samples (i.e., STD0uM.T
 V7 Add another flag where the script enters an editor for plate or vial manifest files. 
 
 FUTURE:
-V7 Ensures when there are no vial samples all trays can be used for plates, and vice versa (no plates there should
+V8 Ensures when there are no vial samples all trays can be used for plates, and vice versa (no plates there should
 always be available vials). 
 
 Input:
