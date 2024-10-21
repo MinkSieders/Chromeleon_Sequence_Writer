@@ -61,5 +61,5 @@ Mink Sieders
 6.1 (Last Updated: 21/10/2024)
 
 ## License
-
+MIT License. Copyright (c) 2024 Mink Sieders
 
