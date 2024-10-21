@@ -8,11 +8,11 @@ import warnings
 import matplotlib.pyplot as plt
 
 """
+Chromeleon Sample Sequence Writer
+
 Author: Mink Sieders, 24/09/2024 09:21 AM
 
-Current Version: 6.1, 21/10/2024
-
-CHANGELOG:
+Changelog:
 V5.1 Ensured standards (samples with id beginning with STD) are ran between samples controlled 
 with an x number of times throughout the run. 
 V5.2 Added a sample tray layout overview as part of the output in .pdf format.
@@ -27,6 +27,22 @@ FUTURE:
 V7 Ensures when there are no vial samples all trays can be used for plates, and vice versa (no plates there should
 always be available vials). 
 V7 Add another flag where the script enters an editor for plate or vial manifest files. 
+
+Input:
+- A manifest folder containing:
+  - A 'plates' subfolder with .xlsx files for 96-well plate designs
+  - A 'vials.xlsx' file for 1.5 mL vial samples
+
+Usage:
+- Run with --help for usage instructions
+- Use --setup_env True to create a mock/template manifest folder environment
+
+Note: This script is flexible and can handle various plate and vial configurations. Users should not change the 
+'vials.xlsx' filename, but plate manifest files in the 'plates' folder can have any name.
+
+Author: Mink Sieders
+Version: 6.1
+Last Updated: 21/10/2024
 """
 
 
