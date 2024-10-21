@@ -39,18 +39,23 @@ Run the script with the following command:
 - `--technical_replicates_samples`: Number of times each sample is injected into HPLC (default: 2)
 - `--vial_instrument_method`: Specify a method for vial samples that differs from the main instrument_method
 - `--setup_env`: Create a template manifest folder environment (use: --setup_env True)
+- `--manifest_editor`: Opens a UI where users can conveniently edit manifest files (use: --manifest_editor True)
 
 ### Examples
 
-1. Setup template environment:
+1. Setup template manifest environment:
 
 `python ChromeleonSequenceWriter.py --setup_env True`
 
-2. Basic usage:
+2. Conveniently edit manifest files:
+
+`python ChromeleonSequenceWriter.py --manifest_editor True`
+
+3. Basic usage:
 
 `python ChromeleonSequenceWriter.py --folder /path/to/manifest_folder`
 
-3. Custom settings:
+4. Custom settings:
 
 `python ChromeleonSequenceWriter.py --folder /path/to/manifest_folder --instrument_method Custom_Method --injection_volume 30 --plate_tray_number 3 --standard_replicate_number 4`
 
