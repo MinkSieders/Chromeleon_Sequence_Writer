@@ -19,7 +19,7 @@ This script automatically generates HPLC sample sequence series from .xlsx 96-we
 ## Usage
 Run the script with the following command:
 
-'python ChromeleonSequenceWriter_V6.1.py [arguments]'
+`python ChromeleonSequenceWriter_V6.1.py [arguments]`
 
 ### Arguments
 - `--folder`: Path to the folder containing vials.xlsx and plates folder (required)
@@ -36,15 +36,15 @@ Run the script with the following command:
 ### Examples
 1. Basic usage:
 
-'python ChromeleonSequenceWriter_V6.1.py --folder /path/to/manifest_folder'
+`python ChromeleonSequenceWriter_V6.1.py --folder /path/to/manifest_folder`
 
 3. Custom settings:
 
-'python ChromeleonSequenceWriter_V6.1.py --folder /path/to/manifest_folder --instrument_method Custom_Method --injection_volume 30 --plate_tray_number 3 --standard_replicate_number 4'
+`python ChromeleonSequenceWriter_V6.1.py --folder /path/to/manifest_folder --instrument_method Custom_Method --injection_volume 30 --plate_tray_number 3 --standard_replicate_number 4`
 
 5. Setup template environment:
 
-'python ChromeleonSequenceWriter_V6.1.py --setup_env True'
+`python ChromeleonSequenceWriter_V6.1.py --setup_env True`
 
 ## Output
 The script generates:
