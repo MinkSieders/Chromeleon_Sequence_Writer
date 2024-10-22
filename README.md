@@ -23,7 +23,7 @@ The R and T notations are not required and the script will also function when on
 If a '.' is used, the script will still attempt to seperate the string into components and find replicate
 and timepoint numbers. The script will assume the component at index 0 will be the sample name. 
 
-Note: This script is flexible and can handle various plate and vial configurations. Users should not change the 'vials.xlsx' filename, but plate manifest files in the 'plates' folder can have any name.
+Note: this script is flexible and can handle various plate and vial configurations. Users should not change the 'vials.xlsx' filename, but plate manifest files in the 'plates' folder can have any name.
 
 ## Usage
 Run the script with the following command:
