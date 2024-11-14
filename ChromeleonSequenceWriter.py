@@ -29,17 +29,10 @@ V7 Add another flag where the script enters an editor for plate or vial manifest
 
 FUTURE:
 V8 Ensures when there are no vial samples all trays can be used for plates, and vice versa (no plates there should
-always be available vials). 
-
-Input:
-- A manifest folder containing:
-  - A 'plates' subfolder with .xlsx files for 96-well plate designs
-  - A 'vials.xlsx' file for 1.5 mL vial samples
+always be available vials). Additionally it will add the options of sampling randomly and following the order of 
+well plates (non-specifically-ordered)
 
 User is referred to the accompanying readme file for extensive explanation, or use --help
-
-Note: This script is flexible and can handle various plate and vial configurations. Users should not change the 
-'vials.xlsx' filename, but plate manifest files in the 'plates' folder can have any name.
 
 Author: Mink Sieders
 Version: 7
@@ -535,7 +528,7 @@ def start_editor_UI():
     # Create the main window
     root = tk.Tk()
     root.title("Manifest Editor")
-    root.geometry("800x600")
+    root.geometry("1600x1200")
 
     # Global variables to store the current dataframe and filepath
     df = None
@@ -597,7 +590,6 @@ def start_editor_UI():
 
         if df is not None:
             cols = list(df.columns)
-            nonlocal tree
             tree = ttk.Treeview(table_frame, columns=cols, show="headings", selectmode="browse")
             for col in cols:
                 tree.heading(col, text=col)
@@ -607,6 +599,7 @@ def start_editor_UI():
             for index, row in df.iterrows():
                 tree.insert("", "end", values=list(row))
 
+            tree.bind('<Button-1>', set_r_t_numbers)  # Bind to the Treeview, not table_frame
             tree.pack(expand=True, fill=tk.BOTH)
 
     def add_row():
@@ -622,11 +615,11 @@ def start_editor_UI():
             try:
                 selected_items = tree.selection()
                 for item in selected_items:
+                    values = tree.item(item, "values")
+                    index = df[df.iloc[:, 0] == values[0]].index[0]  # Match based on a unique column, adjust as needed
+                    df.drop(index, inplace=True)
                     tree.delete(item)
-                    # Also remove it from the dataframe
-                    df.drop(df.index[int(item)], inplace=True)
                 df.reset_index(drop=True, inplace=True)
-                update_table()
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to delete row: {e}")
 
@@ -689,44 +682,76 @@ def start_editor_UI():
             return sample_name
 
     def set_r_t_numbers(event):
-
-        nonlocal tree
-        # Identify the clicked cell (row and column)
-        item_id = tree.identify_row(event.y)  # Get the row item ID
-        col_id = tree.identify_column(event.x)  # Get the column (e.g., #1, #2, etc.)
+        nonlocal tree, df
+        item_id = tree.identify_row(event.y)
+        col_id = tree.identify_column(event.x)
 
         if item_id and col_id:
-            col_num = int(col_id.replace("#", "")) - 1  # Convert to zero-based index
+            col_num = int(col_id.replace("#", "")) - 1
             try:
-                # Get the current sample name from the clicked cell
                 sample_name = tree.item(item_id, 'values')[col_num]
-
-                # Get the R and T values from the Entry fields
                 r_value = int(r_entry.get()) if r_entry.get() else None
                 t_value = int(t_entry.get()) if t_entry.get() else None
 
-                # Validate R and T values
                 if r_value is None or t_value is None:
                     messagebox.showerror("Invalid input", "Please enter valid R and T values.")
                     return
 
-                # Call the existing format_sample_name function to get the new name
                 new_sample_name = sample_format_4ui(sample_name, replicate_number=0, r_num=r_value, t_num=t_value)
 
-                # Update the table with the new sample name
+                # Update Treeview and DataFrame
                 values = list(tree.item(item_id, 'values'))
-                values[col_num] = new_sample_name  # Update the specific cell
-                tree.item(item_id, values=values)  # Set the updated values
-
-                print(f"Current sample name: {sample_name}")
-                print(f"R value: {r_value}, T value: {t_value}")
-                print(f"New sample name: {new_sample_name}")
+                values[col_num] = new_sample_name
+                tree.item(item_id, values=values)
+                df.iloc[int(item_id[1:]), col_num] = new_sample_name
 
             except ValueError:
                 messagebox.showerror("Invalid input", "R and T values must be integers")
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to update cell: {e}")
 
+    def splash_column(column_type):
+        nonlocal df, tree
+        if df is not None:
+            try:
+                # Get the value for the specified column type
+                value = None
+                if column_type == 'R':
+                    value = int(r_entry.get()) if r_entry.get() else None
+                elif column_type == 'T':
+                    value = int(t_entry.get()) if t_entry.get() else None
+
+                if value is None:
+                    messagebox.showerror("Invalid input", f"Please enter a valid {column_type} value.")
+                    return
+
+                # Iterate over each visible row in the Treeview
+                for item_id in tree.get_children():
+                    values = list(tree.item(item_id, 'values'))
+
+                    # Update each cell's sample name
+                    for i in range(len(values)):
+                        current_sample_name = values[i]
+                        new_sample_name = sample_format_4ui(
+                            current_sample_name,
+                            replicate_number=0,
+                            r_num=value if column_type == 'R' else None,
+                            t_num=value if column_type == 'T' else None
+                        )
+                        values[i] = new_sample_name  # Update with formatted name
+
+                    # Update Treeview with new values
+                    tree.item(item_id, values=values)
+
+                    # Sync changes to the DataFrame
+                    df.iloc[int(item_id[1:]), :] = values
+
+                messagebox.showinfo("Success", f"Set {column_type}={value} for all visible cells.")
+
+            except ValueError:
+                messagebox.showerror("Invalid input", f"{column_type} value must be an integer.")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to splash values: {e}")
 
     # UI Components
     table_frame = tk.Frame(root)
@@ -753,6 +778,12 @@ def start_editor_UI():
     delete_row_btn = tk.Button(btn_frame, text="Delete Row", command=delete_row, state=tk.DISABLED)
     delete_row_btn.pack(side=tk.LEFT, padx=5, pady=5)
 
+    splash_r_btn = tk.Button(btn_frame, text="Splash R", command=lambda: splash_column('R'))
+    splash_r_btn.pack(side=tk.LEFT, padx=5)
+
+    splash_t_btn = tk.Button(btn_frame, text="Splash T", command=lambda: splash_column('T'))
+    splash_t_btn.pack(side=tk.LEFT, padx=5)
+
     r_label = tk.Label(btn_frame, text="Set R:")
     r_label.pack(side=tk.LEFT, padx=5)
 
@@ -776,7 +807,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate HPLC program from sample data.")
     parser.add_argument("--folder", help="Folder containing vials.xlsx and plates folder.", default=None)
     parser.add_argument("--instrument_method", default=None,
-                        help="Instrument method used for all samples (default: MS_Catecholamine_Iso_col25) or only "
+                        help="Instrument method used for all samples (default: injection_method) or only "
                              "for 96-well samples when --vial_instrument_method is specified")
     parser.add_argument("--injection_volume", default=None, type=float, help="Injection volume in ul "
                                                                              "(default: 25.0)")
@@ -863,7 +894,7 @@ if __name__ == "__main__":
                     print(f"Error: {e}")
 
         if args.instrument_method == None:
-            method = "MS_Catecholamine_Iso_col25"
+            method = "injection_method"
             print(f"\nUsing default instrument method name: {method}")
         else:
             method = args.instrument_method
